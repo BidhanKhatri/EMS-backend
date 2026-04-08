@@ -1,8 +1,18 @@
 import SystemSettings from '../models/SystemSettings.js';
 import Holiday from '../models/Holiday.js';
 import Attendance from '../models/Attendance.js';
+import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
-import { startOfDay, endOfDay, isWeekend, parseISO } from 'date-fns';
+import { addMinutes, startOfDay, endOfDay, isWeekend, parseISO, setHours, setMinutes, setSeconds, setMilliseconds } from 'date-fns';
+
+const getScheduledDateTime = (baseDate, hhmm) => {
+  const [h, m] = String(hhmm || '00:00').split(':').map(Number);
+  let date = setHours(baseDate, h || 0);
+  date = setMinutes(date, m || 0);
+  date = setSeconds(date, 0);
+  date = setMilliseconds(date, 0);
+  return date;
+};
 
 export const getSettings = async () => {
   let settings = await SystemSettings.findOne();
@@ -13,13 +23,54 @@ export const getSettings = async () => {
 };
 
 export const updateSettings = async (data) => {
+  const now = new Date();
+  const sanitizedData = { ...data };
+  if (Object.hasOwn(sanitizedData, 'activitySessionMinutes')) {
+    sanitizedData.activitySessionMinutes = Math.max(0, Number(sanitizedData.activitySessionMinutes) || 0);
+  }
+  if (Object.hasOwn(sanitizedData, 'activityGraceMinutes')) {
+    sanitizedData.activityGraceMinutes = Math.max(0, Number(sanitizedData.activityGraceMinutes) || 0);
+  }
+  if (Object.hasOwn(sanitizedData, 'activityMissPenaltyPoints')) {
+    sanitizedData.activityMissPenaltyPoints = Math.max(1, Number(sanitizedData.activityMissPenaltyPoints) || 1);
+  }
+
   let settings = await SystemSettings.findOne();
   if (!settings) {
-    settings = new SystemSettings(data);
+    settings = new SystemSettings(sanitizedData);
   } else {
-    Object.assign(settings, data);
+    Object.assign(settings, sanitizedData);
   }
   await settings.save();
+
+  if ((settings.activitySessionMinutes || 0) <= 0) {
+    await User.updateMany(
+      { role: 'EMPLOYEE' },
+      { $set: { nextActivityDueAt: null, lastActivityPromptAt: null } }
+    );
+  } else {
+    const today = now.toISOString().split('T')[0];
+    const activeAttendances = await Attendance.find({ date: today, checkOutTime: null }).select('userId');
+    const userIds = activeAttendances.map((a) => a.userId);
+    if (userIds.length) {
+      const shiftStart = getScheduledDateTime(now, settings.checkInTime);
+      const nextDue = now < shiftStart
+        ? shiftStart
+        : addMinutes(now, settings.activitySessionMinutes);
+
+      await User.updateMany(
+        { _id: { $in: userIds }, nextActivityDueAt: null },
+        {
+          $set: {
+            lastActivityMarkAt: now,
+            nextActivityDueAt: nextDue,
+            lastActivityPromptAt: null,
+          },
+        }
+      );
+    }
+  }
+
   return settings;
 };
 

@@ -20,3 +20,21 @@ export const approveRequest = catchAsync(async (req, res) => {
     request
   });
 });
+
+export const getUsers = catchAsync(async (req, res) => {
+  const result = await adminService.getUsers(req.query);
+  res.status(200).send(result);
+});
+
+export const removeUser = catchAsync(async (req, res) => {
+  await adminService.deleteUser(req.params.id);
+  res.status(200).send({ message: 'User removed successfully' });
+});
+
+export const toggleUserStatus = catchAsync(async (req, res) => {
+  const user = await adminService.toggleUserStatus(req.params.id);
+  res.status(200).send({
+    message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`,
+    user
+  });
+});

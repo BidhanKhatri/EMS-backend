@@ -7,6 +7,9 @@ const systemSettingsSchema = new mongoose.Schema(
     earlyMargin: { type: Number, default: 5 }, // minutes
     lateMargin: { type: Number, default: 5 }, // minutes
     disableWeekends: { type: Boolean, default: true }, // auto mark weekends as holidays
+    activitySessionMinutes: { type: Number, default: 0 }, // 0 = disabled
+    activityGraceMinutes: { type: Number, default: 5 },
+    activityMissPenaltyPoints: { type: Number, default: 8 },
   },
   { timestamps: true }
 );

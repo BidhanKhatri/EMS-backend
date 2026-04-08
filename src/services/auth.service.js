@@ -58,3 +58,25 @@ export const verifyEmail = async (token) => {
 
   return user;
 };
+
+export const updateUserProfile = async (userId, updates) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  if (updates.email && updates.email !== user.email) {
+    const existingUser = await User.findOne({ email: updates.email });
+    if (existingUser && existingUser.id !== user.id) {
+      throw new ApiError(400, 'Email already taken');
+    }
+    user.email = updates.email;
+  }
+
+  if (updates.name) {
+    user.name = updates.name;
+  }
+
+  await user.save();
+  return user;
+};

@@ -25,3 +25,32 @@ export const verifyEmail = catchAsync(async (req, res) => {
   await authService.verifyEmail(req.body.token);
   res.send({ code: 200, message: 'Email verified successfully. You can now login.' });
 });
+
+export const getProfile = catchAsync(async (req, res) => {
+  const user = req.user;
+  res.send({
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      performanceScore: user.performanceScore,
+    },
+  });
+});
+
+export const updateProfile = catchAsync(async (req, res) => {
+  const updatedUser = await authService.updateUserProfile(req.user.id, req.body);
+
+  res.send({
+    code: 200,
+    message: 'Profile updated successfully',
+    user: {
+      id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      role: updatedUser.role,
+      performanceScore: updatedUser.performanceScore,
+    },
+  });
+});

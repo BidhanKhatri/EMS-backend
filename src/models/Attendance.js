@@ -17,6 +17,8 @@ const attendanceSchema = new mongoose.Schema(
       enum: ['NONE', 'PENDING', 'APPROVED', 'REJECTED'], 
       default: 'NONE' 
     },
+    overtimeMinutes: { type: Number, default: 0 },
+    overtimePoints: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

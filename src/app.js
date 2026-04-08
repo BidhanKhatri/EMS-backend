@@ -13,6 +13,7 @@ import attendanceRoutes from './routes/attendance.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import groupRoutes from './routes/group.routes.js';
 import settingRoutes from './routes/setting.routes.js';
+import activityRoutes from './routes/activity.routes.js';
 
 dotenv.config();
 
@@ -33,12 +34,17 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
 // Rate Limiting
+const isProduction = process.env.NODE_ENV === 'production';
 const initLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: isProduction ? 100 : 1000,
   message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
 });
-app.use('/api', initLimiter);
+if (isProduction || process.env.ENABLE_DEV_RATE_LIMIT === 'true') {
+  app.use('/api', initLimiter);
+}
 
 // Setup routes
 app.use('/api/auth', authRoutes);
@@ -46,6 +52,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/settings', settingRoutes);
+app.use('/api/activity', activityRoutes);
 
 app.get('/', (req, res) => {
   res.send('EMS API is running.');

@@ -21,6 +21,15 @@ export const verifyEmailSchema = z.object({
   }),
 });
 
+export const updateProfileSchema = z.object({
+  body: z.object({
+    name: z.string().trim().min(2, 'Name must be at least 2 characters').optional(),
+    email: z.string().trim().email('Invalid email address').optional(),
+  }).refine((data) => Object.keys(data).length > 0, {
+    message: 'Provide at least one field to update',
+  }),
+});
+
 export const validate = (schema) => (req, res, next) => {
   try {
     schema.parse({

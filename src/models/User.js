@@ -13,6 +13,9 @@ const userSchema = new mongoose.Schema(
     totalPoints: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
     verificationToken: { type: String },
+    lastActivityMarkAt: { type: Date, default: null },
+    nextActivityDueAt: { type: Date, default: null },
+    lastActivityPromptAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

@@ -3,6 +3,8 @@ import ApprovalRequest from '../models/ApprovalRequest.js';
 import User from '../models/User.js';
 import Group from '../models/Group.js';
 import PerformanceLog from '../models/PerformanceLog.js';
+import ActivityLog from '../models/ActivityLog.js';
+import SystemSettings from '../models/SystemSettings.js';
 import ApiError from '../utils/ApiError.js';
 
 export const getDashboardStats = async () => {
@@ -12,6 +14,15 @@ export const getDashboardStats = async () => {
   
   const today = new Date().toISOString().split('T')[0];
   const todayAttendances = await Attendance.countDocuments({ date: today });
+  const settings = await SystemSettings.findOne();
+  const trackingEnabled = (settings?.activitySessionMinutes || 0) > 0;
+  const activeTrackingNow = trackingEnabled
+    ? await Attendance.countDocuments({ date: today, checkOutTime: null })
+    : 0;
+  const missedActivityToday = await ActivityLog.countDocuments({
+    type: 'MISSED',
+    timestamp: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+  });
 
   const allEmployees = await User.find({ role: 'EMPLOYEE' })
     .sort({ performanceScore: -1 })
@@ -54,6 +65,9 @@ export const getDashboardStats = async () => {
 
   return { 
     totalEmployees, totalGroups, pendingApprovals, todayAttendances, 
+    trackingEnabled,
+    activeTrackingNow,
+    missedActivityToday,
     topPerformers: enriched.slice(0, 3),
     leaderboard: enriched,
   };
@@ -108,4 +122,55 @@ export const processApproval = async (requestId, adminId, isApproved) => {
     session.endSession();
     throw error;
   }
+};
+
+export const getUsers = async (query) => {
+  const { page = 1, limit = 10, search = '' } = query;
+  const skip = (page - 1) * limit;
+
+  const filter = {};
+  if (search) {
+    filter.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+    ];
+  }
+
+  const users = await User.find(filter)
+    .populate('groupId', 'name')
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  const totalUsers = await User.countDocuments(filter);
+  const totalPages = Math.ceil(totalUsers / limit);
+
+  return {
+    users,
+    totalUsers,
+    totalPages,
+    currentPage: Number(page),
+  };
+};
+
+export const deleteUser = async (userId) => {
+  const user = await User.findById(userId);
+  if (!user) throw new ApiError(404, 'User not found');
+  
+  // Optional: Prevent deleting the last admin or yourself
+  // For now, just remove
+  await User.findByIdAndDelete(userId);
+  
+  // Consider deleting related performance logs, attendance, etc.
+  // We'll keep them for historical records or delete them if required.
+  return user;
+};
+
+export const toggleUserStatus = async (userId) => {
+  const user = await User.findById(userId);
+  if (!user) throw new ApiError(404, 'User not found');
+
+  user.isActive = !user.isActive;
+  await user.save();
+  return user;
 };

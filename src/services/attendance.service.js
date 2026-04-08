@@ -3,7 +3,7 @@ import User from '../models/User.js';
 import ApprovalRequest from '../models/ApprovalRequest.js';
 import PerformanceLog from '../models/PerformanceLog.js';
 import ApiError from '../utils/ApiError.js';
-import { format } from 'date-fns';
+import { addMinutes, differenceInMinutes, format, setHours, setMinutes, setSeconds, setMilliseconds } from 'date-fns';
 
 import { getTodayStatus, getSettings } from './setting.service.js';
 
@@ -12,6 +12,15 @@ const addPerformancePoints = async (userId, points, reason, session) => {
   await User.findByIdAndUpdate(userId, { 
     $inc: { performanceScore: points, totalPoints: points > 0 ? points : 0 }
   }, { session });
+};
+
+const getScheduledDateTime = (baseDate, hhmm) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  let date = setHours(baseDate, h || 0);
+  date = setMinutes(date, m || 0);
+  date = setSeconds(date, 0);
+  date = setMilliseconds(date, 0);
+  return date;
 };
 
 export const checkIn = async (userId) => {
@@ -75,6 +84,24 @@ export const checkIn = async (userId) => {
       await addPerformancePoints(userId, pointsAwarded, `Check-in status: ${status}`, session);
     }
 
+    const nowDate = new Date();
+    const shiftStart = getScheduledDateTime(nowDate, settings.checkInTime);
+    const initialDue = nowDate < shiftStart ? shiftStart : addMinutes(nowDate, settings.activitySessionMinutes || 0);
+
+    if ((settings.activitySessionMinutes || 0) > 0) {
+      await User.findByIdAndUpdate(userId, {
+        lastActivityMarkAt: nowDate,
+        nextActivityDueAt: initialDue,
+        lastActivityPromptAt: null,
+      }, { session });
+    } else {
+      await User.findByIdAndUpdate(userId, {
+        lastActivityMarkAt: null,
+        nextActivityDueAt: null,
+        lastActivityPromptAt: null,
+      }, { session });
+    }
+
     if (needsApproval) {
       await ApprovalRequest.create([{
         userId,
@@ -106,8 +133,40 @@ export const checkOut = async (userId) => {
     throw new ApiError(400, 'Already checked out today');
   }
 
-  attendance.checkOutTime = new Date();
+  const now = new Date();
+  attendance.checkOutTime = now;
+
+  const settings = await getSettings();
+  const scheduledCheckout = getScheduledDateTime(now, settings.checkOutTime);
+  let overtimeMinutes = 0;
+  let overtimePoints = 0;
+
+  if (now > scheduledCheckout) {
+    overtimeMinutes = Math.max(0, differenceInMinutes(now, scheduledCheckout));
+    // 1 point per 15 mins, capped at 16 points/day (4 hours)
+    overtimePoints = Math.min(16, Math.floor(overtimeMinutes / 15));
+  }
+
+  attendance.overtimeMinutes = overtimeMinutes;
+  attendance.overtimePoints = overtimePoints;
   await attendance.save();
+
+  if (overtimePoints > 0) {
+    await PerformanceLog.create({
+      userId,
+      points: overtimePoints,
+      reason: `Overtime reward: ${overtimeMinutes} mins beyond scheduled checkout`,
+    });
+    await User.findByIdAndUpdate(userId, {
+      $inc: { performanceScore: overtimePoints, totalPoints: overtimePoints },
+    });
+  }
+
+  await User.findByIdAndUpdate(userId, {
+    nextActivityDueAt: null,
+    lastActivityPromptAt: null,
+  });
+
   return attendance;
 };
 
