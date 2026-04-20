@@ -7,6 +7,11 @@ import connectDB from './config/db.js';
 import { errorHandler } from './middlewares/error.middleware.js';
 import ApiError from './utils/ApiError.js';
 import initCronJobs from './jobs/employeeOfMonth.job.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import authRoutes from './routes/auth.routes.js';
 import attendanceRoutes from './routes/attendance.routes.js';
@@ -32,6 +37,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Enable CORS
 app.use(cors());
+
+// Serve static uploads
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Rate Limiting
 const isProduction = process.env.NODE_ENV === 'production';

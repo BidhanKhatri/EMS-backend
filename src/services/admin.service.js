@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Attendance from '../models/Attendance.js';
 import ApprovalRequest from '../models/ApprovalRequest.js';
 import User from '../models/User.js';
@@ -173,4 +174,76 @@ export const toggleUserStatus = async (userId) => {
   user.isActive = !user.isActive;
   await user.save();
   return user;
+};
+
+import Feedback from '../models/Feedback.js';
+import Notification from '../models/Notification.js';
+import { sendEmail } from '../utils/mailer.js';
+
+export const processFeedback = async (userId, adminId, { text, points, imageUrl }) => {
+  const user = await User.findById(userId);
+  if (!user) throw new ApiError(404, 'User not found');
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const feedback = await Feedback.create([{
+      userId,
+      adminId,
+      text,
+      imageUrl,
+      pointsChanged: points
+    }], { session });
+
+    if (points !== 0) {
+      await PerformanceLog.create([{
+        userId,
+        points,
+        reason: `Admin Feedback: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`
+      }], { session });
+
+      await User.findByIdAndUpdate(userId, {
+        $inc: { 
+          performanceScore: points,
+          totalPoints: points > 0 ? points : 0
+        }
+      }, { session });
+    }
+
+    const notification = await Notification.create([{
+      userId,
+      audience: 'EMPLOYEE',
+      title: points !== 0 ? `Feedback Received (${points > 0 ? '+' : ''}${points} pts)` : 'Feedback Received',
+      message: text,
+      metadata: { feedbackId: feedback[0]._id, points }
+    }], { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // Send email outside of transaction (best-effort)
+    const emailHtml = `
+      <h2>New Feedback from Admin</h2>
+      <p><strong>Message:</strong> ${text}</p>
+      ${points !== 0 ? `<p><strong>Points Adjustment:</strong> ${points > 0 ? '+' : ''}${points}</p>` : ''}
+      <p>Log into your portal to see more details.</p>
+      <br>
+      <p>EMS System</p>
+    `;
+    await sendEmail({
+      to: user.email,
+      subject: 'New Feedback from Administrator',
+      html: emailHtml
+    });
+
+    return {
+      feedback: feedback[0],
+      notification: notification[0]
+    };
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
 };

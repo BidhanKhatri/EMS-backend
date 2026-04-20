@@ -22,8 +22,15 @@ export const login = catchAsync(async (req, res) => {
 });
 
 export const verifyEmail = catchAsync(async (req, res) => {
-  await authService.verifyEmail(req.body.token);
+  const { email, otp } = req.body;
+  await authService.verifyEmail(email, otp);
   res.send({ code: 200, message: 'Email verified successfully. You can now login.' });
+});
+
+export const resendOTP = catchAsync(async (req, res) => {
+  const { email } = req.body;
+  await authService.resendOTP(email);
+  res.send({ code: 200, message: 'A new OTP has been sent to your email.' });
 });
 
 export const getProfile = catchAsync(async (req, res) => {
@@ -53,4 +60,21 @@ export const updateProfile = catchAsync(async (req, res) => {
       performanceScore: updatedUser.performanceScore,
     },
   });
+});
+
+export const forgotPassword = catchAsync(async (req, res) => {
+  await authService.forgotPassword(req.body.email);
+  res.send({ code: 200, message: 'Password reset OTP has been sent to your email.' });
+});
+
+export const verifyResetOTP = catchAsync(async (req, res) => {
+  const { email, otp } = req.body;
+  await authService.verifyResetOTP(email, otp);
+  res.send({ code: 200, message: 'OTP verified successfully. You can now reset your password.' });
+});
+
+export const resetPassword = catchAsync(async (req, res) => {
+  const { email, otp, password } = req.body;
+  await authService.resetPassword(email, otp, password);
+  res.send({ code: 200, message: 'Password has been reset successfully. You can now login.' });
 });

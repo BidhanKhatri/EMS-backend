@@ -10,6 +10,11 @@ const systemSettingsSchema = new mongoose.Schema(
     activitySessionMinutes: { type: Number, default: 0 }, // 0 = disabled
     activityGraceMinutes: { type: Number, default: 5 },
     activityMissPenaltyPoints: { type: Number, default: 8 },
+    smtpUser: { type: String, default: '' },
+    smtpPass: { type: String, default: '' },
+    smtpHost: { type: String, default: 'smtp.gmail.com' },
+    smtpPort: { type: Number, default: 465 },
+    approvalNotificationEmail: { type: String, default: '' },
   },
   { timestamps: true }
 );

@@ -16,6 +16,11 @@ export const getNotifications = catchAsync(async (req, res) => {
   res.status(200).send(notifications);
 });
 
+export const getUnreadCount = catchAsync(async (req, res) => {
+  const count = await activityService.getUnreadNotificationsCount(req.user);
+  res.status(200).send({ count });
+});
+
 export const markNotificationRead = catchAsync(async (req, res) => {
   const notification = await activityService.markNotificationRead(req.user, req.params.id);
   res.status(200).send(notification);

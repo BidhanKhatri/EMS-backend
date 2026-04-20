@@ -173,6 +173,20 @@ export const getMyNotifications = async (user, sort = 'latest') => {
   return Notification.find(query).sort({ createdAt: sortOrder }).limit(100);
 };
 
+export const getUnreadNotificationsCount = async (user) => {
+  const query = user.role === 'ADMIN'
+    ? { audience: 'ADMIN', isRead: false }
+    : {
+        isRead: false,
+        $or: [
+          { userId: user.id },
+          { audience: 'EMPLOYEE', userId: null },
+        ],
+      };
+
+  return Notification.countDocuments(query);
+};
+
 export const markNotificationRead = async (user, notificationId) => {
   const notification = await Notification.findById(notificationId);
   if (!notification) throw new ApiError(404, 'Notification not found');

@@ -17,7 +17,35 @@ export const loginSchema = z.object({
 
 export const verifyEmailSchema = z.object({
   body: z.object({
-    token: z.string().min(1, 'Token is required'),
+    email: z.string().email('Invalid email address'),
+    otp: z.string().length(4, 'OTP must be 4 digits'),
+  }),
+});
+
+export const resendOTPSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email address'),
+  }),
+});
+
+export const forgotPasswordSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email address'),
+  }),
+});
+
+export const verifyResetOTPSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email address'),
+    otp: z.string().length(4, 'OTP must be 4 digits'),
+  }),
+});
+
+export const resetPasswordSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email address'),
+    otp: z.string().length(4, 'OTP must be 4 digits'),
+    password: z.string().min(6, 'Password must be at least 6 characters'),
   }),
 });
 

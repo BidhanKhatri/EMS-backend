@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import ApprovalRequest from '../models/ApprovalRequest.js';
 import PerformanceLog from '../models/PerformanceLog.js';
 import ApiError from '../utils/ApiError.js';
+import { sendEmail } from '../utils/mailer.js';
 import { addMinutes, differenceInMinutes, format, setHours, setMinutes, setSeconds, setMilliseconds } from 'date-fns';
 
 import { getTodayStatus, getSettings } from './setting.service.js';
@@ -103,11 +104,55 @@ export const checkIn = async (userId) => {
     }
 
     if (needsApproval) {
+      const checkInTimeStr = format(now, 'hh:mm a');
+      const delayMins = currentTimeInMinutes - targetTimeInMinutes;
       await ApprovalRequest.create([{
         userId,
         attendanceId: attendance[0]._id,
-        reason: 'Late check-in after 9:05 AM'
+        reason: `Late check-in at ${checkInTimeStr}. Delayed by ${delayMins} minutes (Scheduled: ${settings.checkInTime}).`
       }], { session });
+
+      // Send email notification to admin
+      if (settings.approvalNotificationEmail) {
+        const user = await User.findById(userId).session(session);
+        const subject = `Approval Required: Late Check-In - ${user.name}`;
+        const html = `
+          <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
+            <h2 style="color: #d97706;">Late Check-In Approval Required</h2>
+            <p>Hello Admin,</p>
+            <p>An employee has checked in late and requires your approval:</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+              <tr>
+                <td style="padding: 8px; border: 1px solid #eee; font-weight: bold; width: 140px;">Employee:</td>
+                <td style="padding: 8px; border: 1px solid #eee;">${user.name} (${user.email})</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #eee; font-weight: bold;">Check-In Time:</td>
+                <td style="padding: 8px; border: 1px solid #eee;">${checkInTimeStr}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #eee; font-weight: bold;">Lateness:</td>
+                <td style="padding: 8px; border: 1px solid #eee; color: #b91c1c;">${delayMins} minutes late</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border: 1px solid #eee; font-weight: bold;">Scheduled:</td>
+                <td style="padding: 8px; border: 1px solid #eee;">${settings.checkInTime}</td>
+              </tr>
+            </table>
+            <p>Please log in to the Admin Portal to review and approve/reject this request.</p>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="font-size: 12px; color: #666;">This is an automated notification from the EMS System.</p>
+          </div>
+        `;
+        
+        // We don't await the email send to avoid blocking the transaction/response, 
+        // but we should catch errors. Actually, better to send after transaction commit
+        // but for simplicity and immediate feedback we trigger it.
+        // To be safe, we'll trigger it without blocking.
+        sendEmail({ to: settings.approvalNotificationEmail, subject, html }).catch(err => {
+          console.error('Failed to send approval notification email:', err);
+        });
+      }
     }
 
     await session.commitTransaction();
